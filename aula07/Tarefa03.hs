@@ -315,12 +315,15 @@ converterListaDeFreq ((c, code, f) : xs) = (c, f) : converterListaDeFreq xs
 -- Esta função recebe um nome para arquivo e as informaçãos sobre um texto codificado e escreve em...
 -- ... um arquivo a tabela exposta na lista de execícios:
 escritaCompactada :: FilePath -> (Word8, Word32, [Word8], [(Char, String, Int)]) -> IO ()
-escritaCompactada dest info@(num_char, total_char, texto_codificado, sub_info@((c, code, f) : xs)) =
+escritaCompactada dest info@(num_char, total_char, texto_codificado, sub_info) =
                                     do
-                                    let nt = P.runPut (put [(I.w2c num_char, fromIntegral total_char)])
-                                    let char_freq = P.runPut (put (converterListaDeFreq sub_info))
-                                    let texto_codificado' = P.runPut (putOnlyBytes texto_codificado)
-                                    L.writeFile dest (nt <> char_freq <> texto_codificado')
+                                    if total_char == 0 then L.writeFile dest L.empty
+                                    else
+                                        do
+                                        let nt = P.runPut (put [(I.w2c num_char, fromIntegral total_char)])
+                                        let char_freq = P.runPut (put (converterListaDeFreq sub_info))
+                                        let texto_codificado' = P.runPut (putOnlyBytes texto_codificado)
+                                        L.writeFile dest (nt <> char_freq <> texto_codificado')
 
 -- Esta função lê o arquivo src e escreve em um arquivo dest a tabela de compactação proposta...
 -- ... na lista de exercícios: 
@@ -423,10 +426,13 @@ getHeader n a@(w8 : t) = let (w32, rest) = divList 4 t in
 leituraArqCompactado src =  do
                             let dest = DT.unpack (DT.replace (DS.fromString " - compactado") (DS.fromString "") (DS.fromString (takeBaseName src))) ++ " - descompactado.txt"
                             bytes <- L.readFile src
-                            let (n, t) = G.runGet leituraHeader bytes
-                            let (_, to_format_bytes) = divList 5 (G.runGet getBytes bytes)
-                            let (pairs, texto_codificado) = getHeader (fromIntegral n) to_format_bytes
-                            let tree = huffman (freqSimbExtra (converterParesCharFreq pairs))
-                            let texto_decodificado = decodificarN (fromIntegral t) (byteList2Str texto_codificado) tree
-                            putStrLn texto_decodificado
-                            writeFile (DS.fromString dest) texto_decodificado
+                            if bytes == L.empty then writeFile (DS.fromString dest) ""
+                            else 
+                                do
+                                let (n, t) = G.runGet leituraHeader bytes
+                                let (_, to_format_bytes) = divList 5 (G.runGet getBytes bytes)
+                                let (pairs, texto_codificado) = getHeader (fromIntegral n) to_format_bytes
+                                let tree = huffman (freqSimbExtra (converterParesCharFreq pairs))
+                                let texto_decodificado = decodificarN (fromIntegral t) (byteList2Str texto_codificado) tree
+                                putStrLn texto_decodificado
+                                writeFile (DS.fromString dest) texto_decodificado
